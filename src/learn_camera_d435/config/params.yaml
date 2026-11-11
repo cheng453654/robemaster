@@ -1,0 +1,163 @@
+# learn_camera_d435 ROS 参数
+#
+# 路径都是本机绝对路径；换机器/换模型时改这里即可，不用改代码。
+
+d435_camera:
+  ros__parameters:
+    width: 640
+    height: 480
+    fps: 30
+    frame_id: camera_color_optical_frame
+    # 深度空间/时间滤波。默认关闭；快速运动时也不要打开 temporal。
+    depth_filter: false
+    depth_temporal: true
+    # 彩色相机曝光。默认自动；运动模糊明显时改手动并降低曝光时间：
+    #   auto_exposure: false
+    #   exposure: 80        # 单位 100µs，80 = 8ms（越短越不糊，但更暗/噪声更大）
+    #   gain: 80            # 曝光降低后适当提高
+    auto_exposure: true
+    exposure: 166.0
+    gain: 64.0
+    # 0=关闭，1=50Hz，2=60Hz，3=自动；国内市电建议 1，减少频闪条纹
+    power_line_frequency: 3
+    sharpness: 50
+    color_topic: /camera/color/image_raw
+    depth_topic: /camera/depth/image_raw
+    camera_info_topic: /camera/color/camera_info
+
+yolo_detector:
+  ros__parameters:
+    model_path: /home/jetson/models/part4/best.engine
+    class_name: part4
+    # 注意：这里故意用较低的验证阈值，保证跟踪阶段还能拿到框。
+    # FoundationPose 节点用自己的 det_acquire_conf 决定是否注册。
+    conf: 0.25
+    device: "0"
+    # Jetson 上 YOLO 单帧约 20ms，跑 30Hz 会长期占用约 60% GPU，
+    # 和 FoundationPose 抢资源（跟踪单帧从 ~100ms 涨到 150ms+）。
+    # 降到 10Hz 足够做检测/跟踪校验（det_max_age=1.0s）。
+    process_rate: 10.0
+    # 无人看 YOLO 原始调试图时关掉，省 CPU/带宽（FP 调试图里已经画了框）
+    publish_debug_image: false
+    image_topic: /camera/color/image_raw
+    detections_topic: /yolo/detections
+    debug_image_topic: /yolo/debug_image
+
+foundationpose:
+  ros__parameters:
+    mesh_path: /home/jetson/RCIA_Benmao_Vision/models/object/part4_cylinder_base.obj
+    mesh_scale: 1.0
+
+    mask_mode: sam
+    # MobileSAM（vit_t）：实测分割 1.9~2.7s -> 0.22s，与 vit_b 的 mask IoU
+    # 0.91~0.99，注册位姿差 <0.2mm/<0.22°。
+    # 想回原版 SAM：sam_model_type: vit_b +
+    #   sam_checkpoint: /home/jetson/RCIA_Benmao_Vision/models/sam/sam_vit_b_01ec64.pth
+    sam_checkpoint: /home/jetson/models/sam/mobile_sam.pt
+    sam_model_type: vit_t
+    sam_select: score
+    # 6GB 桌面卡保持 false（每次用完释放）；Jetson 16GB 统一内存可设 true，
+    # 避免每次注册都重新加载 SAM（省 1~2 秒）
+    sam_keep_loaded: true
+
+    est_refine_iter: 5
+    # 两阶段注册：先给全部朝向假设打粗分（scorer 便宜），只精修前 topk 个。
+    # 实测 96 个假设：8.6s -> 2.8s，最终位姿差 <1.1mm / <1.6°，跟踪几帧内收敛。
+    # reg_two_stage=false 或 reg_topk<=0 退回原版 register()（全量精修）。
+    reg_two_stage: true
+    reg_topk: 12
+    # 跟踪迭代次数：1 更流畅（实测约 26Hz），2 更准但只有约 15Hz。
+    # 如果发现快速运动时位姿明显漂移，再改回 2。
+    track_refine_iter: 1
+    crop_ratio: 1.2
+    # 朝向过滤：相机看不到物体背面时，只保留可见面一侧的初始朝向假设。
+    # vis_dir 是 mesh 坐标系里「从物体指向相机」的方向，可由一次成功注册
+    # 的位姿反算：d = normalize(-R^T t)。
+    # rot_filter_deg 越小假设越少、注册越快，但要求物体放置朝向越固定。
+    # 本机实测（est_refine_iter=5，离线复现）：
+    #   90° 126 个假设  约 10.0s
+    #   75°  96 个假设  约 7.3~8.6s   IoU 与 90° 相同（0.80~0.84）
+    #   60°  54 个假设  约 4.2s       位姿与 90° 差 Δt<=0.4mm Δr<=0.48°
+    #   45°  36 个假设  约 3.0s       位姿与 90° 差 Δt<=0.9mm Δr<=1.27°
+    # 现场放置朝向变化最大约 75°，所以取 75（再小会漏掉部分朝向）。
+    # 若物体朝相机的那一面偏离 vis_dir 超过该角度，注册会直接失败
+    # （被 reg_min_iou 拦下并回到搜索），不会给出错误位姿。0 关闭过滤。
+    rot_filter_deg: 75.0
+    vis_dir: [0.03, -0.50, 0.87]
+    # 注册后的稳定性验证：先跟踪 settle_frames 帧，窗口内所有位姿相对
+    # 首帧的偏差都不超过阈值才提交（发布）位姿；超时仍不稳定则丢弃本次
+    # 锁定、回到搜索。settle_frames: 0 关闭验证（注册完立即发布）。
+    # Jetson Orin：实测单帧跟踪 400~500ms（约 2.2Hz），3s 超时凑不满 10 帧，
+    # 所以窗口缩短到 6 帧、超时放宽到 8s（6×0.5s≈3s，留足余量）。
+    settle_frames: 6
+    settle_dt: 0.005      # 窗口内最大平移偏差（米）
+    settle_ddeg: 1.5      # 窗口内最大旋转偏差（度）
+    settle_timeout: 8.0   # 超时（秒）
+    smooth: 0.0
+    motion_predict: 0.0
+    fp_debug: false
+    fp_debug_dir: /tmp/fp_debug
+
+    # 诊断记录：把注册/稳定性验证/跟踪过程写成 CSV + 事件日志，
+    # 目录 /tmp/fp_debug_ros/<启动时间>/。用 tools/analyze_fp_log.py 分析。
+    # 每次启动一个子目录；注册时刻的 rgb/depth/mask 会存成 npz 供离线复现。
+    debug_record: true
+    debug_record_dir: /tmp/fp_debug_ros
+    debug_record_frames: true
+
+    # 注册门槛：YOLO 置信度 >= 0.85 才认为可以提交给 SAM/FoundationPose。
+    # 背景误检常见于 0.7 左右，调高可以避免反复注册导致画面卡。
+    det_acquire_conf: 0.85
+    det_select: conf
+    det_class: ""
+    # 同一个框连续稳定出现 3 帧才注册
+    det_stable_frames: 3
+    det_stable_iou: 0.5
+    # 注册后 mesh 投影必须和检测框有至少这个 IoU，否则丢弃
+    reg_min_iou: 0.15
+    # YOLO 跟踪校验：FP 投影框和 YOLO 框的 IoU 连续过低/连续漏检才重新注册。
+    # 这里刻意放宽，避免快速运动时投影暂时滞后就被误判为跟丢。
+    yolo_track_check: true
+    yolo_lock_iou: 0.15
+    yolo_lost_frames: 15
+    yolo_miss_frames: 30
+    det_max_age: 1.0
+    det_timeout: 0.5
+    # 分割/注册失败后的重试冷却时间（秒），避免每帧都跑 SAM+注册
+    acquire_cooldown: 1.5
+    # 注册失败的框（多半是背景误检）在 bad_rect_ttl 秒内不再重试，
+    # 避免每隔几秒就再卡一次 3 秒的注册
+    bad_rect_ttl: 10.0
+    bad_rect_iou: 0.4
+
+    # 摄像头节点发布 32FC1 米制深度；只有接 16UC1 时才用 depth_scale
+    depth_scale: 0.001
+    max_stamp_diff: 0.05
+    camera_frame: camera_color_optical_frame
+    object_frame: object
+
+    publish_tf: true
+    publish_debug_image: true
+    # 调试图里在 mesh 原点画物体坐标轴（红X 绿Y 蓝Z），轴长单位米
+    draw_axes: true
+    axis_length: 0.05
+    # 调试图 10Hz 足够肉眼看；30Hz 只是多占 CPU/GPU 合成
+    debug_rate: 10.0
+    processing_rate: 30.0
+    # 每隔多少秒打印一次实际 tick/debug/pose 频率（0 关闭）
+    rate_log_period: 5.0
+
+    color_topic: /camera/color/image_raw
+    depth_topic: /camera/depth/image_raw
+    camera_info_topic: /camera/color/camera_info
+    detections_topic: /yolo/detections
+    pose_topic: /foundationpose/object_pose
+    status_topic: /foundationpose/status
+    debug_image_topic: /foundationpose/debug_image
+
+image_viewer:
+  ros__parameters:
+    # 想看原始摄像头画面就改成 /camera/color/image_raw
+    image_topic: /foundationpose/debug_image
+    window_name: FoundationPose ROS
+    display_rate: 30.0
