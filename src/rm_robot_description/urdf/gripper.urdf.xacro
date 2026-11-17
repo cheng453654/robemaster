@@ -1,0 +1,163 @@
+<?xml version="1.0"?>
+<robot name="gripper" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!-- 供 my_robot.urdf.xacro 拼接使用：所有 link/joint 自动加前缀，避免与机械臂重名 -->
+  <xacro:property name="prefix" value="gripper_"/>
+
+  <!-- 材质（motor/shell/bearing/structure/gripper）由 arm.urdf.xacro 统一定义，
+       此处不再重复，否则 urdfdom 会报 "material is not unique" 而拒绝解析。
+       需要单独显示夹爪时请用带材质定义的 gripper.urdf。 -->
+  <link name="${prefix}base_link">
+    <inertial>
+      <origin xyz="4.40151839e-05 2.87796479e-06 -0.00221335342" rpy="0 0 0" />
+      <mass value="0.280685637" />
+      <inertia ixx="0.000257920411" iyy="0.000259109402" izz="0.000133051852" ixy="8.27049847e-07" ixz="4.6932956e-07" iyz="-3.2630713e-10" />
+    </inertial>
+    <visual>
+      <material name="motor" />
+      <origin xyz="-0.0020551205 -1.0285 -0.022307251" rpy="-1.5707963 0 0" />
+      <geometry>
+        <mesh filename="package://rm_robot_description/meshes/part_001_DM-J4310P-2EC-V1.1.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+    </visual>
+    <visual>
+      <material name="structure" />
+      <origin xyz="-0.0020551205 -1.0285 -0.022307251" rpy="-1.5707963 0 0" />
+      <geometry>
+        <mesh filename="package://rm_robot_description/meshes/part_002_-_-1.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+    </visual>
+    <visual>
+      <material name="structure" />
+      <origin xyz="-0.0020551205 -1.0285 -0.022307251" rpy="-1.5707963 0 0" />
+      <geometry>
+        <mesh filename="package://rm_robot_description/meshes/part_009_-_-1.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="-0.0020551205 -1.0285 -0.022307251" rpy="-1.5707963 0 0" />
+      <geometry>
+        <mesh filename="package://rm_robot_description/meshes/part_001_DM-J4310P-2EC-V1.1.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+    </collision>
+    <collision>
+      <origin xyz="-0.0020551205 -1.0285 -0.022307251" rpy="-1.5707963 0 0" />
+      <geometry>
+        <mesh filename="package://rm_robot_description/meshes/part_002_-_-1.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+    </collision>
+    <collision>
+      <origin xyz="-0.0020551205 -1.0285 -0.022307251" rpy="-1.5707963 0 0" />
+      <geometry>
+        <mesh filename="package://rm_robot_description/meshes/part_009_-_-1.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="${prefix}link1">
+    <inertial>
+      <origin xyz="0.00210871824 0.0411229302 -0.00811457052" rpy="0 0 0" />
+      <mass value="0.0672420105" />
+      <inertia ixx="4.31886613e-05" iyy="7.38601243e-06" izz="4.43321518e-05" ixy="7.38941289e-06" ixz="-5.12252749e-08" iyz="-2.00772539e-07" />
+    </inertial>
+    <visual>
+      <material name="structure" />
+      <origin xyz="-0.9243301 -0.046692101 0.50397024" rpy="-3.1415927 -1.0471975 0" />
+      <geometry>
+        <mesh filename="package://rm_robot_description/meshes/part_003_-_-2.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+    </visual>
+    <visual>
+      <material name="structure" />
+      <origin xyz="-0.9243301 -0.046692101 0.50397024" rpy="-3.1415927 -1.0471975 0" />
+      <geometry>
+        <mesh filename="package://rm_robot_description/meshes/part_008_-_-2.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+    </visual>
+    <visual>
+      <material name="structure" />
+      <origin xyz="-0.9243301 -0.046692101 0.50397024" rpy="-3.1415927 -1.0471975 0" />
+      <geometry>
+        <mesh filename="package://rm_robot_description/meshes/part_006_-_-2.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="-0.9243301 -0.046692101 0.50397024" rpy="-3.1415927 -1.0471975 0" />
+      <geometry>
+        <mesh filename="package://rm_robot_description/meshes/part_003_-_-2.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+    </collision>
+    <collision>
+      <origin xyz="-0.9243301 -0.046692101 0.50397024" rpy="-3.1415927 -1.0471975 0" />
+      <geometry>
+        <mesh filename="package://rm_robot_description/meshes/part_008_-_-2.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+    </collision>
+    <collision>
+      <origin xyz="-0.9243301 -0.046692101 0.50397024" rpy="-3.1415927 -1.0471975 0" />
+      <geometry>
+        <mesh filename="package://rm_robot_description/meshes/part_006_-_-2.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="${prefix}link2">
+    <inertial>
+      <origin xyz="-0.00203159728 0.0411395076 -0.00888551222" rpy="0 0 0" />
+      <mass value="0.0672420833" />
+      <inertia ixx="4.2864143e-05" iyy="7.59406168e-06" izz="4.42156785e-05" ixy="-7.69132328e-06" ixz="-5.3142732e-08" iyz="2.01645429e-07" />
+    </inertial>
+    <visual>
+      <material name="structure" />
+      <origin xyz="-0.85913931 -0.046692101 0.50397024" rpy="-3.1415927 -1.0471975 0" />
+      <geometry>
+        <mesh filename="package://rm_robot_description/meshes/part_005_-_-2.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+    </visual>
+    <visual>
+      <material name="structure" />
+      <origin xyz="-0.85913931 -0.046692101 0.50397024" rpy="-3.1415927 -1.0471975 0" />
+      <geometry>
+        <mesh filename="package://rm_robot_description/meshes/part_004_-_-2.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+    </visual>
+    <visual>
+      <material name="structure" />
+      <origin xyz="-0.85913931 -0.046692101 0.50397024" rpy="-3.1415927 -1.0471975 0" />
+      <geometry>
+        <mesh filename="package://rm_robot_description/meshes/part_007_-_-2.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="-0.85913931 -0.046692101 0.50397024" rpy="-3.1415927 -1.0471975 0" />
+      <geometry>
+        <mesh filename="package://rm_robot_description/meshes/part_005_-_-2.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+    </collision>
+    <collision>
+      <origin xyz="-0.85913931 -0.046692101 0.50397024" rpy="-3.1415927 -1.0471975 0" />
+      <geometry>
+        <mesh filename="package://rm_robot_description/meshes/part_004_-_-2.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+    </collision>
+    <collision>
+      <origin xyz="-0.85913931 -0.046692101 0.50397024" rpy="-3.1415927 -1.0471975 0" />
+      <geometry>
+        <mesh filename="package://rm_robot_description/meshes/part_007_-_-2.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="${prefix}joint1" type="revolute">
+    <origin xyz="0.023658902 0.023978431 0.02438485" rpy="1.5707963 0 1.0471976" />
+    <parent link="${prefix}base_link" />
+    <child link="${prefix}link1" />
+    <axis xyz="0 0 1" />
+    <limit lower="-1.163" upper="0.110" effort="10" velocity="5" />
+  </joint>
+  <joint name="${prefix}joint2" type="revolute">
+    <origin xyz="-0.0089364896 -0.032478442 0.02438485" rpy="1.5707963 0 1.0471976" />
+    <parent link="${prefix}base_link" />
+    <child link="${prefix}link2" />
+    <axis xyz="0 0 1" />
+    <limit lower="-1.57" upper="1.57" effort="10" velocity="5" />
+    <mimic joint="${prefix}joint1" multiplier="-1" offset="0" />
+  </joint>
+</robot>

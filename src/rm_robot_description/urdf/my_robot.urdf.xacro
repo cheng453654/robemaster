@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<robot name="my_robot" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+    <!-- use_gazebo:=true 时才加入 gz_ros2_control 硬件接口和 Gazebo 插件，
+         避免 MoveIt/普通 ros2_control_node 加载 Gazebo 专用硬件插件而崩溃 -->
+    <xacro:arg name="use_gazebo" default="false"/>
+
+    <!-- 机械臂：base_link -> link1 -> ... -> link5 -> gripper_plate -->
+    <xacro:include filename="arm.urdf.xacro"/>
+
+    <!-- 末端夹爪：所有 link/joint 带 gripper_ 前缀，避免与机械臂重名 -->
+    <xacro:include filename="gripper.urdf.xacro"/>
+
+    <!-- 夹爪安装关节：把夹爪法兰固定到机械臂末端 -->
+    <joint name="gripper_mount" type="fixed">
+        <parent link="gripper_plate"/>
+        <child link="${prefix}base_link"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+    </joint>
+
+    <!-- Gazebo Sim 相关参数：底座固定、ros2_control 硬件接口、gz_ros2_control 插件。
+         仓库版本不包含 rm_robot.gazebo.xacro，默认 use_gazebo:=false 时不会
+         引用它；本地仿真启动时传 use_gazebo:=true。 -->
+    <xacro:if value="$(arg use_gazebo)">
+        <xacro:include filename="rm_robot.gazebo.xacro"/>
+    </xacro:if>
+
+</robot>
