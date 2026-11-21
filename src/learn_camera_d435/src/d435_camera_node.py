@@ -36,6 +36,13 @@ class D435CameraNode(Node):
             "depth_filter", False).value)
         self.depth_temporal = bool(self.declare_parameter(
             "depth_temporal", True).value)
+        # 深度相机红外投射器。黑色/哑光/镜面表面会吸收红外，导致深度大面积
+        # 丢点（黑色物体尤其明显）。提高 laser_power 是最直接的手段，D435i
+        # 最大 360。emitter_enabled=false 表示关闭投射器，只靠环境光。
+        self.laser_power = float(self.declare_parameter(
+            "laser_power", 360.0).value)
+        self.emitter_enabled = bool(self.declare_parameter(
+            "emitter_enabled", True).value)
         # 彩色相机曝光/画质。默认自动曝光；运动模糊明显时可以改成手动，
         # 把 exposure 调小（单位 100µs，80 = 8ms）并适当提高 gain。
         self.auto_exposure = bool(self.declare_parameter(
@@ -90,6 +97,7 @@ class D435CameraNode(Node):
         device = profile.get_device()
         self.device = device
         self._apply_color_options(device)
+        self._apply_depth_options(device)
         self.add_on_set_parameters_callback(self._on_param_update)
         self.depth_scale = device.first_depth_sensor().get_depth_scale()
         intr = (profile.get_stream(rs.stream.color)
@@ -134,8 +142,15 @@ class D435CameraNode(Node):
             elif prm.name == "sharpness":
                 self.sharpness = int(prm.value)
                 changed = True
+            elif prm.name == "laser_power":
+                self.laser_power = float(prm.value)
+                changed = True
+            elif prm.name == "emitter_enabled":
+                self.emitter_enabled = bool(prm.value)
+                changed = True
         if changed:
             self._apply_color_options(self.device)
+            self._apply_depth_options(self.device)
         return SetParametersResult(successful=True)
 
     def _apply_color_options(self, device):
@@ -173,6 +188,47 @@ class D435CameraNode(Node):
                 f"power_line={sensor.get_option(rs.option.power_line_frequency):.0f}")
         except RuntimeError as exc:
             self.get_logger().warn(f"读取曝光参数失败: {exc}")
+
+    def _apply_depth_options(self, device):
+        """设置红外投射器功率，并把最终生效值打印出来。
+
+        黑色/哑光表面会把投射的红外吸收掉，深度图上表现为大面积空洞。
+        把 laser_power 提到最大通常能把有效深度比例显著拉高；镜面反光
+        角度下仍然会丢点，那是几何问题，调功率解决不了。
+        """
+        try:
+            sensor = device.first_depth_sensor()
+        except RuntimeError as exc:
+            self.get_logger().warn(f"拿不到深度 sensor，跳过投射器设置: {exc}")
+            return
+
+        def set_opt(name, value):
+            try:
+                if sensor.supports(name):
+                    sensor.set_option(name, value)
+                else:
+                    self.get_logger().warn(f"该相机不支持 {name}")
+            except RuntimeError as exc:
+                self.get_logger().warn(f"设置 {name} 失败: {exc}")
+
+        set_opt(rs.option.emitter_enabled,
+                1.0 if self.emitter_enabled else 0.0)
+        # 超出范围时 pyrealsense2 会直接抛异常，先夹到合法区间
+        power = float(self.laser_power)
+        try:
+            rng = sensor.get_option_range(rs.option.laser_power)
+            power = max(rng.min, min(rng.max, power))
+        except RuntimeError:
+            pass
+        set_opt(rs.option.laser_power, power)
+
+        try:
+            lp = sensor.get_option(rs.option.laser_power)
+            em = sensor.get_option(rs.option.emitter_enabled)
+            self.get_logger().info(
+                f"深度投射: emitter={int(em)} laser_power={lp:.0f}")
+        except RuntimeError as exc:
+            self.get_logger().warn(f"读取深度投射参数失败: {exc}")
 
     def _make_depth_filters(self):
         if not self.depth_filter:

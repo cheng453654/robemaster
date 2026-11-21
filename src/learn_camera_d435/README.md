@@ -129,6 +129,12 @@ ros2 service call /foundationpose/reacquire std_srvs/srv/Trigger
 - `width` / `height` / `fps`：默认 640x480@30。
 - `depth_filter`：默认 `false`。快速运动时不要开时间滤波，否则深度拖影。
 - `depth_temporal`：只在 `depth_filter: true` 时生效。
+- `laser_power`：红外投射器功率，D435i 范围 0–360，默认 `360`。黑色、
+  哑光、远距离表面会把投射的红外吸收掉，深度图上表现为大面积空洞；
+  提到最大通常能明显提高有效深度比例。镜面反光角度下仍然丢点，那是
+  几何问题，需要改拍摄角度而不是调功率。
+- `emitter_enabled`：是否开启投射器，默认 `true`。关掉后只靠环境光，
+  黑色物体基本拿不到深度，一般不要关。
 - `auto_exposure` / `exposure` / `gain`：彩色相机曝光。默认自动；运动模糊
   明显时改成 `auto_exposure: false` 并把 `exposure` 调小（单位 100µs，
   80 = 8ms），同时适当提高 `gain`。
@@ -171,6 +177,13 @@ ros2 service call /foundationpose/reacquire std_srvs/srv/Trigger
 - `crop_ratio`：跟踪裁剪窗，快速运动可以调到 1.5。
 - `smooth`：位姿平滑，0 关闭；抖动明显可试 0.3~0.5。
 - `motion_predict`：快速运动外推，0 关闭；可试 1.0。
+- `manual_rect`：手动框（opt-in，默认空字符串）。填 `"x,y,w,h"` 像素坐标后
+  **完全绕过 YOLO**，直接用这个框做 SAM/注册，用于 YOLO 还没训练好时先验证
+  FoundationPose 的注册和跟踪效果。运行时修改立即生效，改完调用
+  `ros2 service call /foundationpose/reacquire std_srvs/srv/Trigger`
+  强制重新注册；改回空字符串恢复 YOLO。手动框模式下会跳过 YOLO 持续校验
+  （没有真检测器，固定框和移动物体对不上会误判跟丢）。
+  坐标可以用 `tools/pick_box.py` 在画面上拖框获得。
 - `det_acquire_conf`：YOLO 置信度达到多少才提交 SAM/注册，默认 0.85。
   背景误检通常在 0.7 左右，调高可以避免反复注册导致画面卡。
 - `det_stable_frames` / `det_stable_iou`：同一个框连续稳定多少帧、IoU 多少

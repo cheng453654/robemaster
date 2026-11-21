@@ -180,6 +180,11 @@ class FoundationPoseNode(Node):
         self.det_timeout = float(p("det_timeout", 1.0).value)
         self.det_select = str(p("det_select", "conf").value)
         self.det_class = str(p("det_class", "").value)
+        # 手动框（opt-in，默认关闭）："x,y,w,h" 像素坐标，左上角原点。
+        # 非空时完全绕过 YOLO，直接把这个框交给 SAM/注册。用于 YOLO 还没
+        # 训好时先验证 FoundationPose 的注册和跟踪效果。运行时可以改，
+        # 改完调用 /foundationpose/reacquire 让它立即生效。
+        self.manual_rect = str(p("manual_rect", "").value)
         self.det_stable_frames = int(p("det_stable_frames", 3).value)
         self.det_stable_iou = float(p("det_stable_iou", 0.5).value)
         self.reg_min_iou = float(p("reg_min_iou", 0.15).value)
@@ -440,6 +445,7 @@ class FoundationPoseNode(Node):
         "yolo_miss_frames": int,
         "det_max_age": float,
         "det_timeout": float,
+        "manual_rect": str,
         "est_refine_iter": int,
         "track_refine_iter": int,
         "settle_frames": int,
@@ -460,6 +466,12 @@ class FoundationPoseNode(Node):
             setattr(self, prm.name, cast(prm.value))
             self.get_logger().info(
                 f"参数已更新: {prm.name}={getattr(self, prm.name)}")
+            if prm.name == "manual_rect":
+                # 换了手动框就清掉"上次注册失败"的记录，否则新框可能
+                # 因为和失败框 IoU 高而被跳过 bad_rect_ttl 秒
+                self.bad_rect = None
+                self.last_candidate_rect = None
+                self.candidate_streak = 0
         return SetParametersResult(successful=True)
 
     def _color_cb(self, msg):
@@ -567,8 +579,42 @@ class FoundationPoseNode(Node):
 
     # ---------------- 检测结果 ----------------
 
+    def _manual_rect(self):
+        """解析 manual_rect 参数，返回 (x, y, w, h) 或 None。
+
+        每次调用都重新读 self.manual_rect，所以 `ros2 param set` 改完
+        立即生效，不用重启节点。
+        """
+        raw = str(self.manual_rect or "").strip()
+        if not raw:
+            return None
+        try:
+            vals = [float(v) for v in raw.replace(";", ",").split(",")
+                    if v.strip()]
+        except ValueError:
+            self.get_logger().warn(
+                f"manual_rect 格式不对: {raw!r}，应为 'x,y,w,h'")
+            return None
+        if len(vals) != 4:
+            self.get_logger().warn(
+                f"manual_rect 需要 4 个数，收到 {len(vals)} 个: {raw!r}")
+            return None
+        x, y, w, h = vals
+        if w <= 1 or h <= 1:
+            return None
+        if self.last_color_shape is None:
+            return (x, y, w, h)
+        H, W = self.last_color_shape[:2]
+        rect = fp.xyxy_to_xywh(x, y, x + w, y + h, W, H)
+        return rect
+
     def _get_dets(self, color_msg):
         """返回 (dets, age)。dets: (x,y,w,h,score,class_id) 列表。"""
+        manual = self._manual_rect()
+        if manual is not None:
+            # 手动模式下直接给一个固定框，age=0 表示永远是最新的
+            return [(manual[0], manual[1], manual[2], manual[3], 1.0,
+                     "manual")], 0.0
         msg = self.last_det
         if msg is None or self.last_color_shape is None:
             return [], float("inf")
@@ -841,7 +887,10 @@ class FoundationPoseNode(Node):
         # ---- YOLO 持续校验 ----
         dets, age = self._get_dets(color_msg)
         lost_reason = None
-        if self.yolo_track_check:
+        # 手动框模式下没有真正的检测器，跳过 YOLO 校验，否则固定框会和
+        # 移动中的物体对不上，导致每隔十几帧就误判跟丢。
+        manual = self._manual_rect() is not None
+        if self.yolo_track_check and not manual:
             fp_rect = fp.projected_rect(
                 self.mesh, pose_raw, self.K, color_bgr.shape)
             if age > self.det_max_age:
@@ -884,8 +933,12 @@ class FoundationPoseNode(Node):
 
         self._publish_pose(pose_out, color_msg)
         self._publish_status(f"locked #{self.lock_index}")
-        iou_text = (f"IoU={self.last_iou:.2f}" if self.yolo_track_check
-                    else "IoU=off")
+        if manual:
+            iou_text = "IoU=manual"
+        elif self.yolo_track_check:
+            iou_text = f"IoU={self.last_iou:.2f}"
+        else:
+            iou_text = "IoU=off"
         self._set_debug(
             None,
             f"locked #{self.lock_index}  track={self.track_frames}  "
