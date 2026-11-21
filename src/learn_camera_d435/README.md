@@ -26,11 +26,18 @@ learn_camera_d435/
 │   ├── fp_common.py            # 三个节点共用：SAM/投影/位姿平滑/框 IoU
 │   ├── learn_d435.py           # 原来的单进程预览脚本（保留）
 │   └── learn_foundationpose.py # 原来的单进程完整脚本（保留）
+├── models/                     # 能量单元模型（合并/贴图）
+├── tools/                      # 手动框选、深度诊断、渲染、贴图生成
+├── docs/
+│   └── ENERGY_UNIT_DETECTION.md # 能量单元检测说明与注意事项
 ├── launch/foundationpose.launch.py
 ├── config/params.yaml
 ├── CMakeLists.txt
 └── package.xml
 ```
+
+> 能量单元的模型来源、贴图生成、相机/注册参数和已知限制，
+> 见 [docs/ENERGY_UNIT_DETECTION.md](docs/ENERGY_UNIT_DETECTION.md)。
 
 ## 环境
 
